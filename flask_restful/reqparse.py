@@ -1,6 +1,7 @@
 from flask import request
-from werkzeug.datastructures import MultiDict
+from werkzeug.datastructures import MultiDict, FileStorage
 import flask_restful
+import inspect
 import six
 
 class Namespace(dict):
@@ -12,10 +13,21 @@ class Namespace(dict):
     def __setattr__(self, name, value):
         self[name] = value
 
+_friendly_location = {
+    u'form': u'the post body',
+    u'args': u'the query string',
+    u'values': u'the post body or the query string',
+    u'headers': u'the HTTP headers',
+    u'cookies': u'the request\'s cookies',
+    u'files': u'an uploaded file',
+}
+
+text_type = lambda x: six.text_type(x)
+
 class Argument(object):
 
     def __init__(self, name, default=None, dest=None, required=False,
-                 ignore=False, type=six.text_type, location=('values',),
+                 ignore=False, type=text_type, location=('json', 'values',),
                  choices=(), action='store', help=None, operators=('=',),
                  case_sensitive=True):
         """
@@ -25,7 +37,7 @@ class Argument(object):
             request.
         :param dest: The name of the attribute to be added to the object
             returned by parse_args(req).
-        :param required: Whether or not the argument may be omitted (optionals
+        :param bool required: Whether or not the argument may be omitted (optionals
             only).
         :param action: The basic type of action to be taken when this argument
             is encountered in the request.
@@ -40,8 +52,8 @@ class Argument(object):
         :param help: A brief description of the argument, returned in the
             response when the argument is invalid. This takes precedence over
             the message passed to a ValidationError raised by a type converter.
-        :param case_sensitive: Whether the arguments in the request are case
-            sensitive or not
+        :param bool case_sensitive: Whether the arguments in the request are
+            case sensitive or not
         """
 
         self.name = name
@@ -78,6 +90,10 @@ class Argument(object):
         return MultiDict()
 
     def convert(self, value, op):
+        # check if we're expecting a string and the value is `None`
+        if value is None and inspect.isclass(self.type) and issubclass(self.type, six.string_types):
+            return None
+
         try:
             return self.type(value, self.name, op)
         except TypeError:
@@ -115,36 +131,43 @@ class Argument(object):
                     values = [source.get(name)]
 
                 for value in values:
-                    if not self.case_sensitive:
+                    _is_file = isinstance(value, FileStorage)
+                    if not (self.case_sensitive or _is_file):
                         value = value.lower()
                     if self.choices and value not in self.choices:
                         self.handle_validation_error(ValueError(
                             u"{0} is not a valid choice".format(value)))
-                    try:
-                        value = self.convert(value, operator)
-                    except Exception as error:
-                        if self.ignore:
-                            continue
+                    if not _is_file:
+                        try:
+                            value = self.convert(value, operator)
+                        except Exception as error:
+                            if self.ignore:
+                                continue
 
-                        self.handle_validation_error(error)
+                            self.handle_validation_error(error)
 
                     results.append(value)
 
         if not results and self.required:
             if isinstance(self.location, six.string_types):
-                error_msg = u"{0} is required in {1}".format(
+                error_msg = u"Missing required parameter {0} in {1}".format(
                     self.name,
-                    self.location
+                    _friendly_location.get(self.location, self.location)
                 )
             else:
-                error_msg = u"{0} is required in {1}".format(
+                friendly_locations = [_friendly_location.get(loc, loc) \
+                                      for loc in self.location]
+                error_msg = u"Missing required parameter {0} in {1}".format(
                     self.name,
-                    ' or '.join(self.location)
+                    ' or '.join(friendly_locations)
                 )
             self.handle_validation_error(ValueError(error_msg))
 
         if not results:
-            return self.default
+            if callable(self.default):
+                return self.default()
+            else:
+                return self.default
 
         if self.action == 'append':
             return results

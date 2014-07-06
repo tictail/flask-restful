@@ -1,19 +1,52 @@
-## Contributors
+Authors
+=======
 
-We'd like to thank the following people who have contributed to this project.
+A huge thanks to all of our contributors:
 
-- Andrew Dunham &lt;andrew@du.nham.ca>
-- Frank Stratton ☺ &lt;epanastasi@epanastasi.com>
-- Giorgio Salluzzo &lt;giorgio.salluzzo@gmail.com>
-- Guillaume BINET &lt;gbin@gootz.net>
-- Kamil Gałuszka &lt;galuszkak@gmail.com>
-- Kevin Burke &lt;kevin@twilio.com>
-- Kyle Conroy &lt;kyle@twilio.com>
-- Piotr Husiatyński &lt;phusiatynski@gmail.com>
-- Robert Warner &lt;radicalphoenix@gmail.com>
-- Ryan Horn &lt;ryanhorn@twilio.com>
-- Victor Neo &lt;icyisamu@gmail.com>
-- Yaniv Aknin &lt;yaniv@aknin.name>
-- Bret Barker &lt;bret@abitrandom.net>
-- y-p &lt;yoval@gmx.com>
-- Doug Black &lt;dblack@twilio.com>
+
+- Andrew Dunham 
+- Antonio Herraiz 
+- Artur Rodrigues 
+- Bennett, Bryan 
+- David Baumgold 
+- David Boucha 
+- David Crawford 
+- Dimitris Theodorou 
+- Doug Black 
+- Frank Stratton 
+- Frank Stratton ☺ 
+- Garret Raziel 
+- Gilles Dartiguelongue 
+- Giorgio Salluzzo 
+- Guillaume BINET 
+- Jacob Magnusson 
+- Joakim Ekberg 
+- Johannes 
+- JuneHyeon Bae 
+- Kamil Gałuszka 
+- Kevin Burke 
+- Kevin Deldycke 
+- Kyle Conroy 
+- Lance Ingle 
+- Lars Holm Nielsen 
+- Miguel Grinberg 
+- Mihai Tomescu 
+- Pavel Tyslyatsky 
+- Petrus J.v.Rensburg 
+- Piotr Husiatyński 
+- Robert Warner 
+- Ryan Horn 
+- Sam Kimbrel 
+- Victor Neo 
+- Yaniv Aknin 
+- bret barker 
+- kelvinhammond 
+- lyschoening 
+- mniebla 
+- muchosalsa 
+- nixdata 
+- papaeye 
+- saml 
+- siavashg 
+- silasray 
+- y-p 

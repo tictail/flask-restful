@@ -1,5 +1,5 @@
 import unittest
-from flask import Flask, views
+from flask import Flask, redirect, views
 from flask.signals import got_request_exception, signals_available
 try:
     from mock import Mock, patch
@@ -8,7 +8,7 @@ except:
     from unittest.mock import Mock, patch
 import flask
 import werkzeug
-from flask.ext.restful.utils import http_status_message, challenge, unauthorized, error_data, unpack
+from flask.ext.restful.utils import http_status_message, error_data, unpack
 import flask_restful
 import flask_restful.fields
 from flask_restful import OrderedDict
@@ -39,22 +39,25 @@ class APITestCase(unittest.TestCase):
         self.assertEquals(http_status_message(404), 'Not Found')
 
 
-    def test_challenge(self):
-        self.assertEquals(challenge('Basic', 'Foo'), 'Basic realm="Foo"')
-
-
     def test_unauthorized(self):
+        app = Flask(__name__)
+        api = flask_restful.Api(app)
         response = Mock()
         response.headers = {}
-        unauthorized(response, "flask-restful")
+        with app.test_request_context('/foo'):
+            response = api.unauthorized(response)
         self.assertEquals(response.headers['WWW-Authenticate'],
                       'Basic realm="flask-restful"')
 
 
     def test_unauthorized_custom_realm(self):
+        app = Flask(__name__)
+        app.config['HTTP_BASIC_AUTH_REALM'] = 'Foo'
+        api = flask_restful.Api(app)
         response = Mock()
         response.headers = {}
-        unauthorized(response, realm='Foo')
+        with app.test_request_context('/foo'):
+            response = api.unauthorized(response)
         self.assertEquals(response.headers['WWW-Authenticate'], 'Basic realm="Foo"')
 
 
@@ -270,6 +273,7 @@ class APITestCase(unittest.TestCase):
 
     def test_api_base(self):
         app = Mock()
+        app.configure_mock(**{'record.side_effect' : AttributeError})
         api = flask_restful.Api(app)
         self.assertEquals(api.urls, {})
         self.assertEquals(api.prefix, '')
@@ -279,13 +283,15 @@ class APITestCase(unittest.TestCase):
     def test_api_delayed_initialization(self):
         app = Flask(__name__)
         api = flask_restful.Api()
-        api.init_app(app)
-
         api.add_resource(HelloWorld, '/', endpoint="hello")
+        api.init_app(app)
+        with app.test_client() as client:
+            self.assertEquals(client.get('/').status_code, 200)
 
 
     def test_api_prefix(self):
         app = Mock()
+        app.configure_mock(**{'record.side_effect' : AttributeError})
         api = flask_restful.Api(app, prefix='/foo')
         self.assertEquals(api.prefix, '/foo')
 
@@ -359,7 +365,9 @@ class APITestCase(unittest.TestCase):
 
     def test_handle_error_signal(self):
         if not signals_available:
-            self.skipTest("Can't test signals without signal support")
+            # This test requires the blinker lib to run.
+            print("Can't test signals without signal support")
+            return
         app = Flask(__name__)
         api = flask_restful.Api(app)
 
@@ -430,6 +438,16 @@ class APITestCase(unittest.TestCase):
                 "status": 404, "message": "You have requested this URI [/fOo] but did you mean /foo ?",
             }))
 
+        app.config['ERROR_404_HELP'] = False
+
+        with app.test_request_context("/fOo"):
+            del exception.data["message"]
+            resp = api.handle_error(exception)
+            self.assertEquals(resp.status_code, 404)
+            self.assertEquals(resp.data.decode(), dumps({
+                "status": 404
+            }))
+
 
     def test_media_types(self):
         app = Flask(__name__)
@@ -464,7 +482,7 @@ class APITestCase(unittest.TestCase):
         def return_zero(func):
             return 0
 
-        app = Mock()
+        app = Mock(flask.Flask)
         app.view_functions = {}
         view = Mock()
         api = flask_restful.Api(app)
@@ -520,7 +538,7 @@ class APITestCase(unittest.TestCase):
 
 
     def test_add_resource(self):
-        app = Mock()
+        app = Mock(flask.Flask)
         app.view_functions = {}
         api = flask_restful.Api(app)
         api.output = Mock()
@@ -530,7 +548,7 @@ class APITestCase(unittest.TestCase):
             view_func=api.output())
 
     def test_add_resource_kwargs(self):
-        app = Mock()
+        app = Mock(flask.Flask)
         app.view_functions = {}
         api = flask_restful.Api(app)
         api.output = Mock()
@@ -660,7 +678,7 @@ class APITestCase(unittest.TestCase):
         with app.test_request_context('/ids/3'):
             self.assertTrue(api._has_fr_route())
 
-            
+
     def test_url_for(self):
         app = Flask(__name__)
         api = flask_restful.Api(app)
@@ -668,7 +686,7 @@ class APITestCase(unittest.TestCase):
         with app.test_request_context('/foo'):
             self.assertEqual(api.url_for(HelloWorld, id = 123), '/ids/123')
 
-            
+
     def test_fr_405(self):
         app = Flask(__name__)
         api = flask_restful.Api(app)
@@ -734,6 +752,20 @@ class APITestCase(unittest.TestCase):
         self.assertTrue(json_dumps_mock.called)
         self.assertEqual(123, kwargs['indent'])
 
+    def test_redirect(self):
+        app = Flask(__name__)
+        api = flask_restful.Api(app)
+
+        class FooResource(flask_restful.Resource):
+            def get(self):
+                return redirect('/')
+
+        api.add_resource(FooResource, '/api')
+
+        app = app.test_client()
+        resp = app.get('/api')
+        self.assertEquals(resp.status_code, 302)
+        self.assertEquals(resp.headers['Location'], 'http://localhost/')
 
 if __name__ == '__main__':
     unittest.main()

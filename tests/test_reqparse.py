@@ -2,9 +2,9 @@
 import unittest
 from mock import Mock, patch, NonCallableMock
 from flask import Flask
-from flask import request as flask_request
 from werkzeug import exceptions
 from werkzeug.wrappers import Request
+from werkzeug.datastructures import FileStorage
 from flask_restful.reqparse import Argument, RequestParser, Namespace
 import six
 
@@ -127,9 +127,12 @@ class ReqParseTestCase(unittest.TestCase):
         self.assertEquals(arg.operators[0], "=")
         self.assertEquals(len(arg.operators), 1)
 
-    def test_default_type(self):
+    @patch('flask_restful.reqparse.six')
+    def test_default_type(self, mock_six):
         arg = Argument("foo")
-        self.assertEquals(arg.type, six.text_type)
+        sentinel = object()
+        arg.type(sentinel)
+        mock_six.text_type.assert_called_with(sentinel)
 
 
     def test_default_default(self):
@@ -204,6 +207,7 @@ class ReqParseTestCase(unittest.TestCase):
 
         req = Mock()
         req.values = ()
+        req.json = None
         req.view_args = {"foo": "bar"}
         parser = RequestParser()
         parser.add_argument("foo", type=str)
@@ -246,7 +250,7 @@ class ReqParseTestCase(unittest.TestCase):
         app = Flask(__name__)
 
         parser = RequestParser()
-        parser.add_argument("foo", location="get_json")
+        parser.add_argument("foo", location="json")
 
         with app.test_request_context('/bubble', method="post",
                                       data=json.dumps({"foo": "bar"}),
@@ -401,7 +405,8 @@ class ReqParseTestCase(unittest.TestCase):
         except exceptions.BadRequest as e:
             message = e.data['message']
 
-        self.assertEquals(message, 'foo is required in values')
+        self.assertEquals(message, (u'Missing required parameter foo in the '
+                                    'post body or the query string'))
 
         parser = RequestParser()
         parser.add_argument("bar", required=True, location=['values', 'cookies'])
@@ -411,7 +416,9 @@ class ReqParseTestCase(unittest.TestCase):
         except exceptions.BadRequest as e:
             message = e.data['message']
 
-        self.assertEquals(message, 'bar is required in values or cookies')
+        self.assertEquals(message, (u"Missing required parameter bar in the "
+                                    "post body or the query string or the "
+                                    "request's cookies"))
 
 
     def test_parse_default_append(self):
@@ -429,6 +436,16 @@ class ReqParseTestCase(unittest.TestCase):
 
         parser = RequestParser()
         parser.add_argument("foo", default="bar")
+
+        args = parser.parse_args(req)
+        self.assertEquals(args['foo'], "bar")
+
+
+    def test_parse_callable_default(self):
+        req = Request.from_values("/bubble")
+
+        parser = RequestParser()
+        parser.add_argument("foo", default=lambda: "bar")
 
         args = parser.parse_args(req)
         self.assertEquals(args['foo'], "bar")
@@ -519,6 +536,57 @@ class ReqParseTestCase(unittest.TestCase):
     def test_namespace_configurability(self):
         self.assertTrue(isinstance(RequestParser().parse_args(), Namespace))
         self.assertTrue(type(RequestParser(namespace_class=dict).parse_args()) is dict)
+
+    def test_none_argument(self):
+
+        app = Flask(__name__)
+
+        parser = RequestParser()
+        parser.add_argument("foo", type=str, location="json")
+        with app.test_request_context('/bubble', method="post",
+                                      data=json.dumps({"foo": None}),
+                                      content_type='application/json'):
+            args = parser.parse_args()
+            self.assertEquals(args['foo'], None)
+
+    def test_type_callable(self):
+        req = Request.from_values("/bubble?foo=1")
+
+        parser = RequestParser()
+        parser.add_argument("foo", type=lambda x: x, required=False),
+
+        args = parser.parse_args(req)
+        self.assertEquals(args['foo'], "1")
+
+    def test_type_callable_none(self):
+        app = Flask(__name__)
+
+        parser = RequestParser()
+        parser.add_argument("foo", type=lambda x: x, location="json", required=False),
+
+        with app.test_request_context('/bubble', method="post",
+                                      data=json.dumps({"foo": None}),
+                                      content_type='application/json'):
+            try:
+                args = parser.parse_args()
+                self.assertEquals(args['foo'], None)
+            except exceptions.BadRequest:
+                self.fail()
+
+    def test_type_filestorage(self):
+        app = Flask(__name__)
+
+        parser = RequestParser()
+        parser.add_argument("foo", type=FileStorage, location='files')
+
+        fdata = six.b('foo bar baz qux')
+        with app.test_request_context('/bubble', method='POST',
+                                      data={'foo': (six.BytesIO(fdata), 'baz.txt')}):
+            args = parser.parse_args()
+
+            self.assertEquals(args['foo'].name, 'foo')
+            self.assertEquals(args['foo'].filename, 'baz.txt')
+            self.assertEquals(args['foo'].read(), fdata)
 
 if __name__ == '__main__':
     unittest.main()

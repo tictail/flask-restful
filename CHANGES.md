@@ -3,6 +3,65 @@ Flask-RESTful Changelog
 
 Here you can see the full list of changes between each Flask-RESTful release.
 
+Version 0.2.12
+--------------
+
+Released March 4, 2014
+
+- Fixed a bug in error handling code.
+- Don't install tests by default.
+- Doc fixes and updates.
+
+Version 0.2.11
+--------------
+
+Released January 17, 2014
+
+- Fixes the List field when marshalling a list of dictionaries. ([#165](https://github.com/twilio/flask-restful/issues/165))
+- Adds Boolean and Price types to fields.__all__ ([#180](https://github.com/twilio/flask-restful/issues/180))
+- Adds support for serializing a set object with a List field. ([#175](https://github.com/twilio/flask-restful/pull/175))
+- Fixes support for using callables as reqparser type arguments ([#167](https://github.com/twilio/flask-restful/pull/167))
+- Add configuration variable to control smart-errors behavior on 404 responses. ([#181](https://github.com/twilio/flask-restful/issues/181))
+- Fixes bug preventing use of Flask redirects. ([#162](https://github.com/twilio/flask-restful/pull/162))
+- Documentation fixes ([#173](https://github.com/twilio/flask-restful/pull/173))
+- Fixes bug swallowing tracebacks in handle_error. ([#166](https://github.com/twilio/flask-restful/pull/166))
+
+Version 0.2.10
+--------------
+
+Released December 17, 2013
+
+- Removes twilio-specific type checks present in version 0.2.9.
+- Correctly bump version number in setup.py.
+
+Version 0.2.9
+-------------
+
+Released December 17, 2013.
+
+- Adds new `positive` and `iso8601interval` types.
+- Typo fix.
+- Updating the test infrastructure to use common Twilio conventions and testing
+  styles.
+
+Version 0.2.8
+-------------
+
+Released November 22, 2013
+
+- Add 'absolute' and 'scheme' to fields.Url
+
+Version 0.2.6
+-------------
+
+Released November 18, 2013
+
+- blueprint support
+- CORS support
+- allow custom unauthorized response
+- when failing to marshal custom indexable objects, its attributes are checked
+- better error messages
+
 Version 0.2.5
 -------------
 
@@ -11,7 +70,6 @@ Released Aug 6, 2013
 - add callable location
 - allow field type Fixed to take an attribute argument
 - added url_for() wrapper as Api.url_for(resource)
-
 
 Version 0.2.4
 -------------

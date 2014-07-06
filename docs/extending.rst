@@ -25,9 +25,9 @@ on the :class:`~Api` object. ::
     api = restful.Api(app)
 
     @api.representation('application/json')
-    def json(data, code, headers):
+    def json(data, code, headers=None):
         resp = make_response(json.dumps(data), code)
-        resp.headers.extend(headers)
+        resp.headers.extend(headers or {})
         return resp
 
 These representation functions must return a Flask :class:`~flask.Response`
@@ -129,12 +129,14 @@ Another way to accomplish this is to subclass the :class:`~Api` class and
 provide your own output functions. ::
 
     class Api(restful.Api):
-        representations = {
-            'application/xml': output_xml,
-            'text/html': output_html,
-            'text/csv': output_csv,
-            'application/json': output_json,
-        }
+        def __init__(self, *args, **kwargs):
+            super(Api, self).__init__(*args, **kwargs)
+            self.representations = {
+                'application/xml': output_xml,
+                'text/html': output_html,
+                'text/csv': output_csv,
+                'application/json': output_json,
+            }
 
 Resource Method Decorators
 --------------------------

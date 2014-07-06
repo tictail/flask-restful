@@ -2,6 +2,7 @@ from decimal import Decimal
 import unittest
 from mock import Mock
 from flask.ext.restful.fields import MarshallingException
+from flask.ext.restful.utils.ordereddict import OrderedDict
 from flask_restful import fields
 from datetime import datetime
 from flask import Flask
@@ -154,6 +155,24 @@ class FieldsTestCase(unittest.TestCase):
         with app.test_request_context("/"):
             self.assertEquals("/3", field.output("hey", Foo()))
 
+
+    def test_url_absolute(self):
+        app = Flask(__name__)
+        app.add_url_rule("/<hey>", "foobar", view_func=lambda x: x)
+        field = fields.Url("foobar", absolute=True)
+
+        with app.test_request_context("/"):
+            self.assertEquals("http://localhost/3", field.output("hey", Foo()))
+
+    def test_url_absolute_scheme(self):
+        """Url.scheme should override current_request.scheme"""
+        app = Flask(__name__)
+        app.add_url_rule("/<hey>", "foobar", view_func=lambda x: x)
+        field = fields.Url("foobar", absolute=True, scheme='https')
+
+        with app.test_request_context("/", base_url="http://localhost"):
+            self.assertEquals("https://localhost/3", field.output("hey", Foo()))
+
     def test_int(self):
         field = fields.Integer()
         self.assertEquals(3, field.output("hey", {'hey': 3}))
@@ -266,6 +285,11 @@ class FieldsTestCase(unittest.TestCase):
         field = fields.List(fields.String)
         self.assertEquals(['a', 'b', 'c'], field.output('list', obj))
 
+    def test_list_from_set(self):
+        obj = {'list': set(['a', 'b', 'c'])}
+        field = fields.List(fields.String)
+        self.assertEquals(set(['a', 'b', 'c']), set(field.output('list', obj)))
+
     def test_list_from_object(self):
         class TestObject(object):
             def __init__(self, list):
@@ -289,6 +313,45 @@ class FieldsTestCase(unittest.TestCase):
         obj = TestObject(None)
         field = fields.List(fields.String)
         self.assertEquals(None, field.output('list', obj))
+
+    def test_indexable_object(self):
+        class TestObject(object):
+            def __init__(self, foo):
+                self.foo = foo
+            def __getitem__(self, n):
+                if type(n) is int:
+                    if n < 3:
+                        return n
+                    raise IndexError
+                raise TypeError
+
+        obj = TestObject("hi")
+        field = fields.String(attribute="foo")
+        self.assertEquals("hi", field.output("foo", obj))
+
+    def test_list_from_dict_with_attribute(self):
+        obj = {'list': [{'a': 1, 'b': 1}, {'a': 2, 'b': 1}, {'a': 3, 'b': 1}]}
+        field = fields.List(fields.Integer(attribute='a'))
+        self.assertEquals([1, 2, 3], field.output('list', obj))
+
+    def test_list_of_nested(self):
+        obj = {'list': [{'a': 1, 'b': 1}, {'a': 2, 'b': 1}, {'a': 3, 'b': 1}]}
+        field = fields.List(fields.Nested({'a': fields.Integer}))
+        self.assertEquals([OrderedDict([('a', 1)]), OrderedDict([('a', 2)]), OrderedDict([('a', 3)])],
+                          field.output('list', obj))
+
+    def test_list_of_raw(self):
+        obj = {'list': [{'a': 1, 'b': 1}, {'a': 2, 'b': 1}, {'a': 3, 'b': 1}]}
+        field = fields.List(fields.Raw)
+        self.assertEquals([OrderedDict([('a', 1), ('b', 1), ]),
+                           OrderedDict([('a', 2), ('b', 1), ]),
+                           OrderedDict([('a', 3), ('b', 1), ])],
+                          field.output('list', obj))
+
+        obj = {'list': [1, 2, 'a']}
+        field = fields.List(fields.Raw)
+        self.assertEquals([1, 2, 'a'], field.output('list', obj))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -10,7 +10,8 @@ from flask_restful import types, marshal
 from flask import url_for
 
 __all__ = ["String", "FormattedString", "Url", "DateTime", "Float",
-           "Integer", "Arbitrary", "Nested", "List", "Raw"]
+           "Integer", "Arbitrary", "Nested", "List", "Raw", "Boolean",
+           "Fixed", "Price"]
 
 
 class MarshallingException(Exception):
@@ -25,7 +26,7 @@ class MarshallingException(Exception):
 
 
 def is_indexable_but_not_string(obj):
-    return not hasattr(obj, "strip") and hasattr(obj, "__getitem__")
+    return not hasattr(obj, "strip") and hasattr(obj, "__iter__")
 
 
 def get_value(key, obj, default=None):
@@ -48,11 +49,9 @@ def _get_value_for_key(key, obj, default):
     if is_indexable_but_not_string(obj):
         try:
             return obj[key]
-        except KeyError:
-            return default
-    if hasattr(obj, key):
-        return getattr(obj, key)
-    return default
+        except (IndexError, TypeError, KeyError):
+            pass
+    return getattr(obj, key, default)
 
 
 def to_marshallable_type(obj):
@@ -135,17 +134,15 @@ class Nested(Raw):
 class List(Raw):
     def __init__(self, cls_or_instance, **kwargs):
         super(List, self).__init__(**kwargs)
+        error_msg = ("The type of the list elements must be a subclass of "
+                     "flask_restful.fields.Raw")
         if isinstance(cls_or_instance, type):
             if not issubclass(cls_or_instance, Raw):
-                raise MarshallingException("The type of the list elements "
-                                           "must be a subclass of "
-                                           "flask_restful.fields.Raw")
+                raise MarshallingException(error_msg)
             self.container = cls_or_instance()
         else:
             if not isinstance(cls_or_instance, Raw):
-                raise MarshallingException("The instances of the list "
-                                           "elements must be of type "
-                                           "flask_restful.fields.Raw")
+                raise MarshallingException(error_msg)
             self.container = cls_or_instance
 
     def output(self, key, data):
@@ -153,8 +150,17 @@ class List(Raw):
         # we cannot really test for external dict behavior
         if is_indexable_but_not_string(value) and not isinstance(value, dict):
             # Convert all instances in typed list to container type
-            return [self.container.output(idx, value) for idx, val
-                    in enumerate(value)]
+            if isinstance(value, set):
+                value = list(value)
+
+            return [
+                self.container.output(idx,
+                                      val if isinstance(val, dict) and
+                                      not isinstance(self.container, Nested)
+                                      and not type(self.container) is Raw
+                                      else value)
+                for idx, val in enumerate(value)
+            ]
 
         if value is None:
             return self.default
@@ -171,6 +177,15 @@ class String(Raw):
 
 
 class Integer(Raw):
+    """ Field for outputting an integer value.
+
+    :param int default: The default value for the field, if no value is
+        specified.
+
+    :param attribute: If the public facing value differs from the internal
+        value, use this to retrieve a different attribute from the response
+        than the publicly named value.
+    """
     def __init__(self, default=0, attribute=None):
         super(Integer, self).__init__(default, attribute)
 
@@ -205,14 +220,19 @@ class Url(Raw):
     """
     A string representation of a Url
     """
-    def __init__(self, endpoint):
+    def __init__(self, endpoint, absolute=False, scheme=None):
         super(Url, self).__init__()
         self.endpoint = endpoint
+        self.absolute = absolute
+        self.scheme = scheme
 
     def output(self, key, obj):
         try:
             data = to_marshallable_type(obj)
-            o = urlparse(url_for(self.endpoint, **data))
+            o = urlparse(url_for(self.endpoint, _external = self.absolute, **data))
+            if self.absolute:
+                scheme = self.scheme if self.scheme is not None else o.scheme
+                return urlunparse((scheme, o.netloc, o.path, "", "", ""))
             return urlunparse(("", "", o.path, "", "", ""))
         except TypeError as te:
             raise MarshallingException(te)
